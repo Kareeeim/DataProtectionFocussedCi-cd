@@ -1,0 +1,8 @@
+# Keep the build context small and avoid leaking local artefacts into the image.
+target/
+.git/
+.gitignore
+.idea/
+*.iml
+*.log
+README.md

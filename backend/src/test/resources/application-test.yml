@@ -1,0 +1,76 @@
+# ===========================================================================
+#  Test configuration
+# ===========================================================================
+#  The suite runs against an in-memory H2 database instead of MySQL so that it
+#  is fast, hermetic and needs no infrastructure: `mvn test` works on a laptop
+#  with no Docker daemon running.
+#
+#  The trade-off is stated plainly because it matters: H2 is not MySQL, so this
+#  suite does NOT prove that the Flyway migrations run or that the MySQL CHECK
+#  constraints bite. It proves the application logic - authentication,
+#  authorisation, validation and transfer atomicity. The migrations are verified
+#  separately by starting the real stack, where `ddl-auto: validate` makes
+#  Hibernate fail loudly if the entities and the migrated schema disagree.
+# ===========================================================================
+
+spring:
+  datasource:
+    # In-memory, private to this JVM, discarded when the context closes.
+    # DATABASE_TO_LOWER keeps unquoted identifiers lowercase, matching the
+    # naming Hibernate generates from the entities.
+    # LOCK_TIMEOUT is raised well above the H2 default so that the concurrency
+    # test observes a transaction *waiting* for a row lock (and then being
+    # correctly refused) rather than H2 giving up and raising a lock timeout.
+    url: jdbc:h2:mem:demobank-test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;DATABASE_TO_LOWER=TRUE;LOCK_TIMEOUT=15000
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    hibernate:
+      # The schema is generated from the entity mappings. Flyway is off, so
+      # nothing would create the tables otherwise.
+      ddl-auto: create-drop
+    open-in-view: false
+    show-sql: false
+
+  flyway:
+    # Disabled: the migrations are MySQL DDL (collations, index hints) that H2
+    # would not accept verbatim. See the header comment.
+    enabled: false
+
+  # The interactive database console is a development tool and has no place in
+  # a running application - switched off explicitly so it can never be enabled
+  # by accident through an inherited property.
+  h2:
+    console:
+      enabled: false
+
+# The API documentation renders the live API and is not needed by the tests.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+app:
+  security:
+    jwt:
+      # A key used only by this suite. It must still be at least 32 characters,
+      # because SecurityProperties validates the length at startup and the
+      # context would refuse to come up otherwise.
+      secret: "test-only-signing-key-never-used-outside-this-test-suite-0123456789"
+      issuer: demobank-api
+      ttl: 15m
+      clock-skew: 30s
+    login:
+      max-attempts: 5
+      window: 15m
+    # Kept as the production value: a JSON endpoint needs no scripts or frames,
+    # and the test suite should not run under a relaxed policy.
+    csp-policy: "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+
+logging:
+  level:
+    root: WARN
+    com.demobank: INFO

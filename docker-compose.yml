@@ -1,0 +1,200 @@
+# ===========================================================================
+#  DemoBank - full stack (MySQL + Spring Boot API + Angular/nginx frontend)
+# ===========================================================================
+#  Start everything with:      docker compose up --build
+#  Then open:                  http://localhost:8080
+#
+#  Security notes on this file:
+#   * The database and the API are NOT published on the host. Only the nginx
+#     reverse proxy (frontend) is reachable from outside; it forwards /api to
+#     the backend over a private Docker network. This removes the whole class
+#     of "internal service exposed to the network" problems.
+#   * MySQL is published on the loopback interface only (127.0.0.1) and solely
+#     to let you inspect the demo data with a local client such as DBeaver.
+#     Remove that mapping if you do not need it.
+#   * Every credential comes from the environment (see .env.example).
+#     The defaults below are demo placeholders so the stack boots out of the
+#     box; the API logs a warning when it detects the shipped demo JWT secret.
+#   * Containers drop Linux capabilities and run with `no-new-privileges`;
+#     the API and the web server run as non-root users on a read-only
+#     root filesystem with explicit tmpfs mounts for the paths they must write.
+# ===========================================================================
+
+services:
+
+  # -------------------------------------------------------------------------
+  # MySQL - stores users, accounts, movements and transfers.
+  # -------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.4
+    container_name: demobank-mysql
+    restart: unless-stopped
+    command:
+      # utf8mb4 everywhere (full Unicode, including emoji) and strict SQL mode
+      # so that bad data is rejected instead of being silently truncated.
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      # NOTE: `--default-authentication-plugin=caching_sha2_password` used to be
+      # set here. MySQL 8.4 REMOVED that variable, and passing a variable the
+      # server does not know is not a warning: mysqld logs "unknown variable"
+      # and aborts, so the container never becomes healthy and the whole stack
+      # refuses to start. Nothing is lost by dropping it - caching_sha2_password
+      # has been the default authentication plugin since 8.0, and the passwords
+      # in db/init are therefore hashed with it either way.
+      # Refuse absurdly large packets / disable local file loading, which is a
+      # classic data-exfiltration vector on a compromised database account.
+      - --local-infile=0
+      - --max_allowed_packet=64M
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-demo_root_pwd_change_me}
+      MYSQL_DATABASE: ${DB_NAME:-demobank}
+      # NOTE: MYSQL_USER / MYSQL_PASSWORD are intentionally NOT set here.
+      # The stock entrypoint would grant that account full rights on the
+      # schema. Instead db/init/01-create-db-users.sh creates two accounts with
+      # separated privileges: a migration user (DDL) and a runtime user (DML).
+      #
+      # Those are the credentials the init script runs with. They MUST be listed
+      # here: Compose substitutes ${...} from the host environment when it reads
+      # this file, but it does not forward host variables into the container.
+      # A variable the script needs and does not find here arrives empty, and
+      # the script refuses to create an account with an empty password.
+      # The defaults match the backend service below, so the two always agree.
+      DB_APP_USER: ${DB_APP_USER:-demobank_app}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-demo_app_pwd_change_me}
+      DB_MIGRATOR_USER: ${DB_MIGRATOR_USER:-demobank_migrator}
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:-demo_migrator_pwd_change_me}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Loopback only: reachable from this machine, invisible to the network.
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3307}:3306"
+    healthcheck:
+      # The API waits for this to report healthy before it starts, so Flyway
+      # never races against a database that is still initialising.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - demobank-net
+    security_opt:
+      - no-new-privileges:true
+
+  # -------------------------------------------------------------------------
+  # Spring Boot REST API.
+  # -------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # Overridable so that the images published by the CI pipeline can be run
+    # instead of a local build. The default is unchanged:
+    #   BACKEND_IMAGE=<dockerhub-user>/backend:latest docker compose pull
+    #   docker compose up -d --no-build
+    image: ${BACKEND_IMAGE:-demobank/backend:1.0.0}
+    container_name: demobank-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
+      # Datasource: least-privilege runtime account (DML only).
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-demobank}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+      DB_APP_USER: ${DB_APP_USER:-demobank_app}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-demo_app_pwd_change_me}
+      # Flyway: separate DDL account, used only during startup migrations.
+      DB_MIGRATOR_USER: ${DB_MIGRATOR_USER:-demobank_migrator}
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:-demo_migrator_pwd_change_me}
+      JWT_SECRET: ${JWT_SECRET:-CHANGE_ME_demo_only_3f8a1c9e5b7d2460af13c8e6d94b7205}
+      # Trust X-Forwarded-* only because the API is unreachable except through
+      # the nginx proxy on the private network (no published port).
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      # The JVM and Tomcat need a writable temp directory.
+      - /tmp:mode=1777,size=64m
+    healthcheck:
+      # busybox wget ships with the alpine JRE image - no extra packages needed.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - demobank-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # -------------------------------------------------------------------------
+  # Backend test runner - behind the `tests` profile, so a plain
+  # `docker compose up` never starts it.
+  # -------------------------------------------------------------------------
+  # Reuses the `test` stage of backend/Dockerfile, which already has the Maven
+  # dependencies resolved, and runs the suite on H2 in memory: no database, no
+  # credentials, no published port, nothing to wait for.
+  #
+  #     docker compose --profile tests run --rm backend-tests
+  #
+  # Not read-only (Maven writes to target/ and ~/.m2), no cap_drop (root inside
+  # the Maven image must be able to write its own layers).
+  backend-tests:
+    profiles: ["tests"]
+    build:
+      context: ./backend
+      target: test
+    image: demobank/backend-tests:1.0.0
+    command: ["mvn", "-B", "-ntp", "test"]
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - demobank-net
+
+  # -------------------------------------------------------------------------
+  # Angular SPA served by nginx, which also reverse-proxies the API.
+  # -------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    # See BACKEND_IMAGE above: same mechanism, same reason.
+    image: ${FRONTEND_IMAGE:-demobank/frontend:1.0.0}
+    container_name: demobank-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      # The single public entrypoint of the whole application.
+      - "${WEB_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      # nginx-unprivileged writes its pid, cache and temp files here.
+      - /tmp:mode=1777,size=32m
+      - /var/cache/nginx:mode=0755,size=32m
+      - /var/run:mode=0755,size=8m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - demobank-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+networks:
+  demobank-net:
+    driver: bridge
+
+volumes:
+  mysql-data:

@@ -1,0 +1,14 @@
+# Normalise line endings so that shell scripts and Dockerfiles always land in the
+# Linux containers with LF endings (CRLF breaks `#!/bin/sh` shebangs and nginx conf).
+* text=auto eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.conf text eol=lf
+*.sql text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.cmd text eol=crlf
+mvnw.cmd text eol=crlf
+*.png binary
+*.ico binary
+*.jar binary

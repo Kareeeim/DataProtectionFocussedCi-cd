@@ -1,0 +1,29 @@
+# ===========================================================================
+#  `prod` profile - hardened configuration
+# ===========================================================================
+#  Activate with SPRING_PROFILES_ACTIVE=prod.
+#
+#  Differences from `demo`:
+#   * API documentation (OpenAPI + Swagger UI) is switched off entirely: it is
+#     a map of the attack surface and has no business being public.
+#   * The CSP goes back to `default-src 'none'`, since only JSON is served.
+#   * The application refuses to start if it detects the shipped demo JWT
+#     secret (see StartupSecurityCheck): a deployment that forgets to set a
+#     real key fails loudly instead of running insecurely.
+#   * Verbose logging is off; only warnings and above from frameworks.
+# ===========================================================================
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+app:
+  security:
+    csp-policy: "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+
+logging:
+  level:
+    root: WARN
+    com.demobank: INFO

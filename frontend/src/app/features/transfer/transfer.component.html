@@ -1,0 +1,210 @@
+<div class="page-header">
+  <div>
+    <h1>New transfer</h1>
+    <p class="page-header__subtitle">Move money between two of your own demo accounts.</p>
+  </div>
+  <a class="button button--secondary" routerLink="/dashboard">&larr; Back to dashboard</a>
+</div>
+
+@if (loadingAccounts()) {
+  <div class="state" role="status">
+    <span class="spinner spinner--dark" aria-hidden="true"></span>
+    <p>Loading your accounts…</p>
+  </div>
+} @else if (accountsError()) {
+  <div class="card state" role="alert">
+    <p class="state__title">Accounts unavailable</p>
+    <p>{{ accountsError() }}</p>
+  </div>
+} @else if (accounts().length < 2) {
+  <div class="card state">
+    <p class="state__title">You need at least two accounts</p>
+    <p>A transfer requires two distinct accounts belonging to you.</p>
+  </div>
+} @else {
+
+  <!-- ================= STEP 1: the form ================= -->
+  @if (step() === 'form') {
+    <section class="card transfer-form">
+      <form [formGroup]="form" (ngSubmit)="review()" novalidate>
+        <div class="transfer-form__row">
+          <div class="field">
+            <label class="field__label" for="source">From account</label>
+            <select id="source" formControlName="sourceAccountId">
+              <option [value]="0" disabled>Select an account</option>
+              @for (account of accounts(); track account.id) {
+                <option [value]="account.id">
+                  {{ shortNumber(account.accountNumber) }} — {{ account.balance | money: account.currency }}
+                </option>
+              }
+            </select>
+            @if (sourceAccount(); as source) {
+              <span class="field__hint">
+                Available: {{ source.balance | money: source.currency }}
+              </span>
+            }
+          </div>
+
+          <div class="field">
+            <label class="field__label" for="destination">To account</label>
+            <select id="destination" formControlName="destinationAccountId">
+              <option [value]="0" disabled>Select an account</option>
+              @for (account of accounts(); track account.id) {
+                <option [value]="account.id">
+                  {{ shortNumber(account.accountNumber) }} — {{ account.balance | money: account.currency }}
+                </option>
+              }
+            </select>
+            @if (form.hasError('sameAccount') && form.controls.destinationAccountId.touched) {
+              <span class="field__error">Choose two different accounts.</span>
+            }
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="amount">Amount</label>
+          <input
+            id="amount"
+            type="text"
+            inputmode="decimal"
+            formControlName="amount"
+            placeholder="0.00"
+            autocomplete="off"
+            [attr.aria-invalid]="showError('amount') || form.hasError('insufficientFunds')"
+          />
+          @if (showError('amount')) {
+            <span class="field__error">
+              @if (form.controls.amount.hasError('required')) {
+                Enter an amount.
+              } @else if (form.controls.amount.hasError('pattern')) {
+                Enter a positive amount with at most two decimal places (for example 125.50).
+              }
+            </span>
+          }
+          @if (form.hasError('insufficientFunds')) {
+            <span class="field__error" role="alert">
+              The amount exceeds the balance available on the source account.
+            </span>
+          }
+          @if (fieldErrors()['amount']) {
+            <span class="field__error">{{ fieldErrors()['amount'] }}</span>
+          }
+          <span class="field__hint">Up to two decimal places. The value is sent exactly as typed.</span>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="description">Description <span class="field__optional">(optional)</span></label>
+          <input
+            id="description"
+            type="text"
+            formControlName="description"
+            maxlength="140"
+            placeholder="For example: rent share"
+          />
+          @if (showError('description')) {
+            <span class="field__error">The description must not exceed 140 characters.</span>
+          }
+        </div>
+
+        <div class="transfer-form__actions">
+          <button type="submit" class="button" [disabled]="form.invalid">Review transfer</button>
+        </div>
+      </form>
+    </section>
+  }
+
+  <!-- ================= STEP 2: review ================= -->
+  @if (step() === 'confirm') {
+    <section class="card confirm">
+      <h2 class="confirm__title">Confirm the transfer</h2>
+      <p class="confirm__lead">Check the details below. Nothing has been sent yet.</p>
+
+      @if (submitError()) {
+        <div class="alert alert--error" role="alert">{{ submitError() }}</div>
+      }
+
+      <dl class="confirm__details">
+        <div>
+          <dt>From</dt>
+          <dd>
+            @if (sourceAccount(); as source) {
+              {{ source.accountNumber }}<span class="confirm__meta">{{ source.ownerName }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>To</dt>
+          <dd>
+            @if (destinationAccount(); as destination) {
+              {{ destination.accountNumber }}<span class="confirm__meta">{{ destination.ownerName }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>Amount</dt>
+          <dd class="confirm__amount">
+            {{ form.controls.amount.value | money: sourceAccount()?.currency }}
+          </dd>
+        </div>
+        @if (form.controls.description.value.trim()) {
+          <div>
+            <dt>Description</dt>
+            <dd>{{ form.controls.description.value }}</dd>
+          </div>
+        }
+      </dl>
+
+      <div class="confirm__actions">
+        <button type="button" class="button" (click)="confirm()" [disabled]="submitting()">
+          @if (submitting()) {
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Sending…</span>
+          } @else {
+            <span>Confirm and send</span>
+          }
+        </button>
+        <button type="button" class="button button--secondary" (click)="edit()" [disabled]="submitting()">
+          Edit
+        </button>
+      </div>
+    </section>
+  }
+
+  <!-- ================= STEP 3: receipt ================= -->
+  @if (step() === 'result' && receipt(); as result) {
+    <section class="card receipt" role="status">
+      <div class="receipt__badge" aria-hidden="true">✓</div>
+      <h2 class="receipt__title">Transfer completed</h2>
+      <p class="receipt__lead">
+        {{ result.amount | money: result.currency }} moved successfully.
+      </p>
+
+      <dl class="receipt__details">
+        <div>
+          <dt>Reference</dt>
+          <dd class="receipt__reference">{{ result.reference }}</dd>
+        </div>
+        <div>
+          <dt>Source balance</dt>
+          <dd>{{ result.sourceAccount.balance | money: result.sourceAccount.currency }}</dd>
+        </div>
+        <div>
+          <dt>Destination balance</dt>
+          <dd>{{ result.destinationAccount.balance | money: result.destinationAccount.currency }}</dd>
+        </div>
+      </dl>
+
+      <div class="receipt__actions">
+        <a class="button" [routerLink]="['/accounts', result.sourceAccount.id]">
+          View source statement
+        </a>
+        <a class="button button--secondary" [routerLink]="['/accounts', result.destinationAccount.id]">
+          View destination statement
+        </a>
+        <button type="button" class="button button--secondary" (click)="startOver()">
+          New transfer
+        </button>
+      </div>
+    </section>
+  }
+}

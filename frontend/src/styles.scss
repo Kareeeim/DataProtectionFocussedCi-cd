@@ -1,0 +1,331 @@
+/* ==========================================================================
+   DemoBank - global styles and design tokens
+   ==========================================================================
+   A single set of CSS custom properties drives the whole interface (colours,
+   spacing, radii, shadows). Components reference the tokens rather than
+   hard-coded values, so the palette can be changed in one place - and the
+   automatic dark-mode block at the bottom only has to redefine the tokens.
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --colour-bg: #f4f6fb;
+  --colour-surface: #ffffff;
+  --colour-surface-muted: #f8fafc;
+  --colour-border: #e2e8f0;
+  --colour-border-strong: #cbd5e1;
+
+  /* Text */
+  --colour-text: #0f172a;
+  --colour-text-muted: #64748b;
+
+  /* Brand */
+  --colour-primary: #1d4ed8;
+  --colour-primary-hover: #1e40af;
+  --colour-accent: #38bdf8;
+  --colour-header-bg: #0f172a;
+  --colour-header-text: #e2e8f0;
+
+  /* Semantics */
+  --colour-success: #15803d;
+  --colour-success-bg: #f0fdf4;
+  --colour-danger: #b91c1c;
+  --colour-danger-bg: #fef2f2;
+  --colour-info: #0369a1;
+  --colour-warning: #b45309;
+
+  /* Layout */
+  --layout-max-width: 68rem;
+  --layout-gutter: 1.25rem;
+
+  /* Shape */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 10px 30px rgba(15, 23, 42, 0.14);
+
+  color-scheme: light;
+}
+
+/* --------------------------------------------------------------------------
+   Reset
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--colour-bg);
+  color: var(--colour-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.015em;
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+h2 {
+  font-size: 1.2rem;
+}
+h3 {
+  font-size: 1rem;
+}
+
+p {
+  margin: 0 0 0.75rem;
+}
+
+/* Always keep the focus ring visible: removing it makes the application
+   unusable by keyboard and is an accessibility failure, not a style choice. */
+:focus-visible {
+  outline: 2px solid var(--colour-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--colour-primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: var(--colour-primary-hover);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.button--secondary {
+  background: var(--colour-surface);
+  color: var(--colour-text);
+  border-color: var(--colour-border-strong);
+
+  &:hover:not(:disabled) {
+    background: var(--colour-surface-muted);
+  }
+}
+
+.button--ghost {
+  background: transparent;
+  color: inherit;
+  border-color: currentColor;
+  opacity: 0.9;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.button--sm {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.button--block {
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Forms
+   -------------------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.field__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--colour-text);
+}
+
+.field__hint {
+  font-size: 0.78rem;
+  color: var(--colour-text-muted);
+}
+
+.field__error {
+  font-size: 0.8rem;
+  color: var(--colour-danger);
+  font-weight: 500;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--colour-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--colour-surface);
+  color: var(--colour-text);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+input:disabled,
+select:disabled {
+  background: var(--colour-surface-muted);
+  color: var(--colour-text-muted);
+}
+
+input[aria-invalid='true'],
+select[aria-invalid='true'] {
+  border-color: var(--colour-danger);
+}
+
+/* --------------------------------------------------------------------------
+   Cards and layout helpers
+   -------------------------------------------------------------------------- */
+
+.card {
+  background: var(--colour-surface);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.25rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.page-header__subtitle {
+  color: var(--colour-text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.state {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--colour-text-muted);
+}
+
+.state__title {
+  font-weight: 600;
+  color: var(--colour-text);
+  margin-bottom: 0.25rem;
+}
+
+/* Visually hidden but available to assistive technology. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Animated loading indicator; stilled for users who ask for less motion. */
+.spinner {
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Dark mode - only the tokens change; every component follows.
+   -------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --colour-bg: #0b1120;
+    --colour-surface: #151d2e;
+    --colour-surface-muted: #1c2740;
+    --colour-border: #26324a;
+    --colour-border-strong: #3a4a68;
+
+    --colour-text: #e8edf7;
+    --colour-text-muted: #94a3b8;
+
+    --colour-primary: #3b82f6;
+    --colour-primary-hover: #60a5fa;
+    --colour-header-bg: #060c17;
+
+    --colour-success: #4ade80;
+    --colour-success-bg: #0d2a1c;
+    --colour-danger: #f87171;
+    --colour-danger-bg: #2c1416;
+    --colour-info: #38bdf8;
+
+    color-scheme: dark;
+  }
+}

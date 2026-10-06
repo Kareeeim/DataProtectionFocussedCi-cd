@@ -1,0 +1,307 @@
+# ===========================================================================
+#  DemoBank - CI/CD pipeline
+# ===========================================================================
+#  Pull requests            : test, build and scan both images. Nothing is
+#                             published, so a fork PR needs no secrets at all.
+#  Pushes to main / v* tags : the same, then publish the images that were
+#                             scanned - never a freshly rebuilt one.
+#  Manual run               : a dry run unless the `push` box is ticked.
+#
+#  Every action is pinned to a full commit SHA, with the readable version in a
+#  trailing comment. Mutable tags are not a theoretical risk here: on
+#  19 March 2026 the tags of aquasecurity/trivy-action (0.0.1 - 0.34.2) were
+#  rewritten to ship a credential stealer (CVE-2026-33634 / GHSA-69fq-xp46-6x23).
+#  Pinning by commit is the mitigation the advisory itself recommends, and it
+#  costs nothing: Dependabot understands SHA pins and keeps the comment current.
+# ===========================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      push:
+        description: 'Push the built images to Docker Hub'
+        type: boolean
+        default: false
+
+# A superseded pull-request run is wasted work and is cancelled. A run that may
+# publish is never cancelled: stopping it half way could leave one image of the
+# pair pushed and the other not.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Least privilege: the pipeline reads the repository and never writes to it.
+permissions:
+  contents: read
+
+jobs:
+
+  # -------------------------------------------------------------------------
+  #  Configuration checks - the cheapest failures, caught first.
+  # -------------------------------------------------------------------------
+  validate:
+    name: Validate compose file and Dockerfiles
+    # Pinned deliberately: `ubuntu-latest` migrates to Ubuntu 26 (announced
+    # 17 Sep 2026), and the Chrome, Maven and containerd versions underneath
+    # would change without a single commit in this repository.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1        # v7.0.1
+        with:
+          # The workflow never pushes to the repository, and several steps below
+          # run third-party code (Maven plugins, npm packages, the Docker build
+          # itself). Without this, the checkout leaves the job token in
+          # .git/config where any of them could read it.
+          persist-credentials: false
+
+      # Parses the YAML *and* interpolates every ${VAR:-default}. A compose file
+      # that only breaks when a variable is set is exactly what this catches.
+      - name: Validate docker-compose.yml
+        run: docker compose config -q
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # BuildKit's own Dockerfile linter (the `--check` build call). It fails on
+      # errors and stays quiet on warnings; hadolint would be the next step.
+      - name: Lint the Dockerfiles
+        run: |
+          docker buildx build --check ./backend
+          docker buildx build --check ./frontend
+
+  # -------------------------------------------------------------------------
+  #  Backend suite - full Spring context on H2. No service, no secret.
+  # -------------------------------------------------------------------------
+  backend-tests:
+    name: Backend tests (JUnit 5 on H2)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1        # v7.0.1
+        with:
+          # The workflow never pushes to the repository, and several steps below
+          # run third-party code (Maven plugins, npm packages, the Docker build
+          # itself). Without this, the checkout leaves the job token in
+          # .git/config where any of them could read it.
+          persist-credentials: false
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6       # v6.0.1
+        # Triaged, not waved away: this job publishes nothing. The published
+        # image is built in the `images` job, on a different runner, inside
+        # Docker, and never reads this ~/.m2 cache. A fork PR cannot write to
+        # the base repository's cache at all, and an in-repo branch author
+        # already has write access to the code the cache could corrupt.
+        with: # zizmor: ignore[cache-poisoning]
+          distribution: temurin
+          java-version: '21'          # the runner image defaults to 17: required
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      # The `test` profile (backend/src/test/resources/application-test.yml)
+      # disables Flyway, generates the schema from the entities and carries its
+      # own literal JWT key, so this job needs no database and no environment.
+      - name: Run the integration suite
+        working-directory: backend
+        run: mvn -B -ntp test
+
+      - name: Upload the Surefire reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/
+          # A compilation error produces no reports at all; that must not turn
+          # into a second, confusing failure on the upload step.
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  #  Frontend - Karma smoke tests, then the production build.
+  # -------------------------------------------------------------------------
+  frontend-tests:
+    name: Frontend tests (Karma + production build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1        # v7.0.1
+        with:
+          # The workflow never pushes to the repository, and several steps below
+          # run third-party code (Maven plugins, npm packages, the Docker build
+          # itself). Without this, the checkout leaves the job token in
+          # .git/config where any of them could read it.
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020       # v7.0.0
+        # Same triage as setup-java above: the frontend image is built by the
+        # `images` job with its own Docker-level cache, so a poisoned ~/.npm
+        # here cannot reach anything that is published.
+        with: # zizmor: ignore[cache-poisoning]
+          node-version: '22'          # exactly the node:22-alpine of frontend/Dockerfile
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `ci`, not `install`: it installs the lockfile and fails if the two files
+      # disagree, so the pipeline can never test a different tree than the one
+      # that was reviewed.
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      # --watch=false is mandatory: the @angular/build:karma builder watches by
+      # default and the job would hang until the timeout kills it.
+      # ChromeHeadlessNoSandbox is a launcher the builder defines itself, which
+      # is why this needs no karma.conf.js; the plain `Chrome` default would try
+      # to open a window on a machine that has none.
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage
+
+      # Ahead-of-time compilation and the bundle budgets (an initial bundle over
+      # 1 MB is an error), without waiting for the slower image build.
+      - name: Production build
+        working-directory: frontend
+        run: npm run build -- --configuration production
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  #  Build, scan, publish. The scan is a gate, not a report.
+  # -------------------------------------------------------------------------
+  images:
+    name: Build, scan and publish (${{ matrix.image }})
+    needs: [validate, backend-tests, frontend-tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      # One image failing must not hide the other's result. The trade-off is
+      # deliberate: each image is verified on its own, but the pair is not
+      # published atomically.
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            context: ./backend
+          - image: frontend
+            context: ./frontend
+    env:
+      # Publish on a push to main or of a v* tag, or on a manual run that ticked
+      # the box. Every pull request builds and scans, and publishes nothing.
+      SHOULD_PUSH: ${{ github.event_name == 'push' || inputs.push == true }}
+      # The Docker Hub account that owns the two repositories. A PR from a fork
+      # sees no secrets, and an empty namespace would produce the invalid
+      # reference `/backend:sha-...`; the fallback keeps the build valid, and
+      # nothing is ever pushed from a PR anyway.
+      IMAGE_NAMESPACE: ${{ secrets.DOCKERHUB_USERNAME || 'demobank-local' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1        # v7.0.1
+        with:
+          # The workflow never pushes to the repository, and several steps below
+          # run third-party code (Maven plugins, npm packages, the Docker build
+          # itself). Without this, the checkout leaves the job token in
+          # .git/config where any of them could read it.
+          persist-credentials: false
+
+      # The default docker driver cannot export a cache; buildx is required.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Before the build, not before the push: Docker Hub allows 100 anonymous
+      # pulls per 6 h per IP and runner IPs are shared, so an unauthenticated
+      # base-image pull is the most likely 429 in this pipeline.
+      - name: Log in to Docker Hub
+        if: env.SHOULD_PUSH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f    # v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302  # v6.2.0
+        with:
+          images: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/v') }}
+
+      # Local only: the image lands in the runner's daemon and is not pushed
+      # until the scan below has passed.
+      - name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            demobank-local/${{ matrix.image }}:scan
+          labels: ${{ steps.meta.outputs.labels }}
+          push: false
+          load: true
+          # Required with `load: true`: an attestation-bearing image cannot be
+          # loaded into the classic image store ("Attestation is not supported
+          # for the docker driver").
+          provenance: false
+          # A per-image scope, or the two matrix legs evict each other's cache;
+          # mode=max, or the intermediate layers - `mvn package`, `npm ci` -
+          # are not cached at all, since both images are multi-stage builds.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          # Written from trusted refs only: a pull request may read the cache
+          # and build fast, but it can never seed the cache entry that a run
+          # allowed to publish will consume.
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}', matrix.image) || '' }}
+
+      # Blocking gate: a CRITICAL or HIGH vulnerability with a fix available
+      # fails the job here, and the push step below is never reached.
+      #
+      # The scanned reference is a local-only tag. Trivy's --image-src falls
+      # back to `remote`, so scanning a pushable tag such as `backend:latest`
+      # could silently inspect the *already published* image and pass the gate
+      # while looking at the wrong artifact. `demobank-local/...` exists in no
+      # registry, which makes that impossible.
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: demobank-local/${{ matrix.image }}:scan
+          severity: CRITICAL,HIGH
+          # An unfixed CVE in a base image is not actionable and would block the
+          # pipeline forever; the fix there is a newer base image.
+          ignore-unfixed: true
+          exit-code: '1'
+          hide-progress: true
+          cache: 'true'
+          # Secret scanning stays off on purpose: the demo JWT in
+          # application-test.yml and the demo defaults in .env.example are
+          # findings by design in a didactic repository.
+
+      # Reached only if the scan passed. The images are never rebuilt between
+      # the scan and this step: both Dockerfiles run `apk --no-cache upgrade`,
+      # so a rebuild is not reproducible and could publish bytes that were
+      # never scanned.
+      - name: Push the scanned image
+        if: env.SHOULD_PUSH == 'true'
+        env:
+          # Through the environment, never interpolated into the script text:
+          # the tags derive from git refs, which are attacker-controlled on a
+          # fork. `demobank-local/...:scan` is absent here on purpose, so it
+          # stays local.
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "Pushing $tag"
+            docker push "$tag"
+          done <<< "$TAGS"

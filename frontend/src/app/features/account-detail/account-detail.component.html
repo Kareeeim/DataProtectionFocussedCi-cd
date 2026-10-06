@@ -1,0 +1,156 @@
+<div class="page-header">
+  <div>
+    <h1>Account statement</h1>
+    @if (account(); as current) {
+      <p class="page-header__subtitle">
+        {{ current.accountNumber }} &middot; {{ current.ownerName }}
+      </p>
+    }
+  </div>
+  <a class="button button--secondary" routerLink="/dashboard">&larr; Back to dashboard</a>
+</div>
+
+@if (loadingAccount()) {
+  <div class="state" role="status">
+    <span class="spinner spinner--dark" aria-hidden="true"></span>
+    <p>Loading account…</p>
+  </div>
+} @else if (accountError()) {
+  <div class="card state" role="alert">
+    <p class="state__title">Account unavailable</p>
+    <p>{{ accountError() }}</p>
+    <a class="button button--secondary button--sm" routerLink="/dashboard">Back to dashboard</a>
+  </div>
+} @else if (account(); as current) {
+  <section class="summary card">
+    <div class="summary__balance">
+      <span class="summary__label">Current balance</span>
+      <span class="summary__value">{{ current.balance | money: current.currency }}</span>
+    </div>
+
+    @if (otherAccounts().length > 1) {
+      <div class="summary__switcher field">
+        <label class="field__label" for="account-switcher">Switch account</label>
+        <select id="account-switcher" [value]="current.id" (change)="onAccountChange($event)">
+          @for (choice of otherAccounts(); track choice.id) {
+            <option [value]="choice.id">
+              {{ shortNumber(choice.accountNumber) }} — {{ choice.balance | money: choice.currency }}
+            </option>
+          }
+        </select>
+      </div>
+    }
+  </section>
+
+  <section class="filters card" aria-label="Movement filters">
+    <h2 class="filters__title">Filter movements</h2>
+    <form class="filters__form" (ngSubmit)="applyFilters()">
+      <div class="field">
+        <label class="field__label" for="from-date">From</label>
+        <input
+          id="from-date"
+          type="date"
+          [value]="fromDate()"
+          (change)="fromDate.set($any($event.target).value)"
+        />
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="to-date">To</label>
+        <input
+          id="to-date"
+          type="date"
+          [value]="toDate()"
+          (change)="toDate.set($any($event.target).value)"
+        />
+      </div>
+
+      <div class="filters__actions">
+        <button type="submit" class="button" [disabled]="loadingMovements()">Apply filters</button>
+        <button type="button" class="button button--secondary" (click)="clearFilters()">
+          Clear
+        </button>
+      </div>
+    </form>
+
+    @if (filterError()) {
+      <p class="field__error" role="alert">{{ filterError() }}</p>
+    }
+    <p class="field__hint">Both dates are inclusive. Results are ordered newest first.</p>
+  </section>
+
+  <section class="movements" aria-label="Movements">
+    @if (movementsError()) {
+      <div class="alert alert--error" role="alert">
+        <span>{{ movementsError() }}</span>
+        <button type="button" class="button button--secondary button--sm" (click)="applyFilters()">
+          Try again
+        </button>
+      </div>
+    }
+
+    @if (loadingMovements() && movements().length === 0) {
+      <div class="state" role="status">
+        <span class="spinner spinner--dark" aria-hidden="true"></span>
+        <p>Loading movements…</p>
+      </div>
+    } @else if (movements().length === 0 && !movementsError()) {
+      <div class="card state">
+        <p class="state__title">No movements found</p>
+        @if (emptyDueToFilters()) {
+          <p>No movements fall within the selected date range.</p>
+          <button type="button" class="button button--secondary button--sm" (click)="clearFilters()">
+            Clear filters
+          </button>
+        } @else {
+          <p>This account has no recorded movements yet.</p>
+        }
+      </div>
+    } @else if (movements().length > 0) {
+      <div class="table-wrapper">
+        <table class="table">
+          <caption class="visually-hidden">
+            Movements of account {{ current.accountNumber }}, newest first
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Description</th>
+              <th scope="col" class="table__amount">Amount</th>
+              <th scope="col" class="table__amount">Balance after</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (movement of movements(); track movement.id) {
+              <tr>
+                <td class="table__date">{{ formatDate(movement.executedAt) }}</td>
+                <td>
+                  <span class="movement__description">{{ movement.description }}</span>
+                  @if (movement.transferReference) {
+                    <span class="movement__reference">
+                      ref {{ movement.transferReference.slice(0, 8) }}
+                    </span>
+                  }
+                </td>
+                <td
+                  class="table__amount"
+                  [class.amount--credit]="movement.type === 'CREDIT'"
+                  [class.amount--debit]="movement.type === 'DEBIT'"
+                >
+                  {{ movement.type === 'DEBIT' ? '−' : '+' }}{{ movement.amount | money: current.currency }}
+                </td>
+                <td class="table__amount table__amount--muted">
+                  {{ movement.balanceAfter | money: current.currency }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      @if (loadingMovements()) {
+        <p class="movements__refreshing" role="status">Refreshing…</p>
+      }
+    }
+  </section>
+}

@@ -1,0 +1,75 @@
+<div class="page-header">
+  <div>
+    <h1>Your accounts</h1>
+    <p class="page-header__subtitle">
+      Signed in as {{ auth.user()?.fullName }} ({{ auth.user()?.email }})
+    </p>
+  </div>
+  <div class="dashboard__actions">
+    <a class="button" routerLink="/transfer">New transfer</a>
+    <button
+      type="button"
+      class="button button--secondary"
+      (click)="loadAccounts()"
+      [disabled]="loading()"
+    >
+      Refresh
+    </button>
+  </div>
+</div>
+
+@if (loading() && !loaded()) {
+  <div class="state" role="status">
+    <span class="spinner spinner--dark" aria-hidden="true"></span>
+    <p>Loading your accounts…</p>
+  </div>
+} @else {
+  @if (errorMessage()) {
+    <div class="alert alert--error" role="alert">
+      <span>{{ errorMessage() }}</span>
+      <button type="button" class="button button--secondary button--sm" (click)="loadAccounts()">
+        Try again
+      </button>
+    </div>
+  }
+
+  @if (totals().length > 0) {
+    <section class="totals" aria-label="Total balance per currency">
+      @for (total of totals(); track total.currency) {
+        <div class="totals__item card">
+          <span class="totals__label">Total ({{ total.currency }})</span>
+          <span class="totals__value">{{ total.total | money: total.currency }}</span>
+        </div>
+      }
+    </section>
+  }
+
+  @if (accounts().length === 0 && !errorMessage()) {
+    <div class="card state">
+      <p class="state__title">No accounts yet</p>
+      <p>This customer has no accounts to display.</p>
+    </div>
+  } @else if (accounts().length > 0) {
+    <section class="accounts" aria-label="Accounts">
+      @for (account of accounts(); track account.id) {
+        <article class="account card">
+          <header class="account__header">
+            <div>
+              <h2 class="account__number">{{ shortNumber(account.accountNumber) }}</h2>
+              <p class="account__holder">{{ account.ownerName }}</p>
+            </div>
+            <span class="account__currency">{{ account.currency }}</span>
+          </header>
+
+          <p class="account__balance">{{ account.balance | money: account.currency }}</p>
+
+          <footer class="account__footer">
+            <a class="button button--secondary button--sm" [routerLink]="['/accounts', account.id]">
+              View movements
+            </a>
+          </footer>
+        </article>
+      }
+    </section>
+  }
+}

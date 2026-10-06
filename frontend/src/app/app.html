@@ -1,0 +1,35 @@
+@if (auth.isAuthenticated()) {
+  <header class="app-header">
+    <div class="app-header__inner">
+      <a class="app-header__brand" routerLink="/dashboard">
+        <span class="app-header__logo" aria-hidden="true">DB</span>
+        <span class="app-header__title">DemoBank</span>
+      </a>
+
+      <nav class="app-header__nav" aria-label="Main navigation">
+        <a routerLink="/dashboard" routerLinkActive="is-active">Dashboard</a>
+        <a routerLink="/transfer" routerLinkActive="is-active">New transfer</a>
+      </nav>
+
+      <div class="app-header__user">
+        <span class="app-header__name">{{ auth.user()?.fullName }}</span>
+        <button type="button" class="button button--ghost button--sm" (click)="signOut()">
+          Sign out
+        </button>
+      </div>
+    </div>
+  </header>
+}
+
+<main class="app-main">
+  <router-outlet />
+</main>
+
+<app-notifications />
+
+<footer class="app-footer">
+  <p>
+    DemoBank is a teaching application. It performs no real banking operation and
+    holds no real personal data.
+  </p>
+</footer>

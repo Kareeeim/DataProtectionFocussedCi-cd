@@ -1,0 +1,33 @@
+# ===========================================================================
+#  `demo` profile - the didactic configuration used by docker compose.
+# ===========================================================================
+#  This profile is meant to be readable and explorable: the OpenAPI UI is on
+#  and the CSP is relaxed just enough for Swagger UI to render.
+#
+#  It is NOT a production configuration. See application-prod.yml for the
+#  hardened counterpart, and the README section "Security" for the full list
+#  of differences.
+# ===========================================================================
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    # Sort endpoints alphabetically so the reference is easy to scan.
+    operations-sorter: alpha
+    tags-sorter: alpha
+  # Only document the controllers we actually wrote.
+  packages-to-scan: com.demobank.web
+
+app:
+  security:
+    # Swagger UI is a JavaScript application: it needs 'self' scripts and
+    # inline styles. Still no frames, no external origins, no eval.
+    csp-policy: "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+logging:
+  level:
+    com.demobank: DEBUG

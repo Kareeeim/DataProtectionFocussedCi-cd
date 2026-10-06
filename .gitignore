@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# Secrets - never commit real credentials.
+# `.env` holds the JWT signing key and the database passwords; only the
+# placeholder template `.env.example` belongs in version control.
+# ---------------------------------------------------------------------------
+.env
+*.env.local
+
+# Build output
+backend/target/
+frontend/dist/
+frontend/.angular/
+
+# Dependencies
+node_modules/
+
+# IDE / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

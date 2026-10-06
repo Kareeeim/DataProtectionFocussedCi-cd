@@ -1,0 +1,27 @@
+# Keep the build context small and reproducible.
+# Anything excluded here is both faster to transfer and impossible to leak into
+# a layer by accident.
+
+# Dependencies and build output: reinstalled and regenerated inside the image.
+node_modules
+dist
+.angular
+coverage
+
+# Local tooling and editor state.
+.git
+.gitignore
+.editorconfig
+.vscode
+.idea
+*.log
+npm-debug.log*
+
+# Local overrides that must never reach a published image.
+.env
+.env.*
+!.env.example
+
+# Docker files themselves.
+Dockerfile
+.dockerignore

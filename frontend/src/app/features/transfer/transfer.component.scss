@@ -1,0 +1,141 @@
+.spinner--dark {
+  border-color: var(--colour-border-strong);
+  border-top-color: var(--colour-primary);
+  margin-bottom: 0.75rem;
+}
+
+.transfer-form {
+  max-width: 42rem;
+}
+
+.transfer-form__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+  gap: 0 1rem;
+}
+
+.transfer-form__actions {
+  margin-top: 0.5rem;
+}
+
+.field__optional {
+  font-weight: 400;
+  color: var(--colour-text-muted);
+}
+
+.alert {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+  border-left: 4px solid transparent;
+  font-size: 0.9rem;
+}
+
+.alert--error {
+  background: var(--colour-danger-bg);
+  border-left-color: var(--colour-danger);
+  color: var(--colour-danger);
+}
+
+/* ---------- review ---------- */
+
+.confirm {
+  max-width: 42rem;
+}
+
+.confirm__title {
+  margin-bottom: 0.25rem;
+}
+
+.confirm__lead {
+  color: var(--colour-text-muted);
+  font-size: 0.9rem;
+}
+
+.confirm__details,
+.receipt__details {
+  display: grid;
+  gap: 0.1rem;
+  margin: 1.25rem 0;
+
+  > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--colour-border);
+  }
+
+  > div:last-child {
+    border-bottom: none;
+  }
+
+  dt {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--colour-text-muted);
+    white-space: nowrap;
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+    font-weight: 600;
+    word-break: break-word;
+  }
+}
+
+.confirm__meta {
+  display: block;
+  font-weight: 400;
+  font-size: 0.78rem;
+  color: var(--colour-text-muted);
+}
+
+.confirm__amount {
+  font-size: 1.15rem;
+}
+
+.confirm__actions,
+.receipt__actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* ---------- receipt ---------- */
+
+.receipt {
+  max-width: 42rem;
+  text-align: left;
+}
+
+.receipt__badge {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--colour-success-bg);
+  color: var(--colour-success);
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.85rem;
+}
+
+.receipt__title {
+  color: var(--colour-success);
+  margin-bottom: 0.25rem;
+}
+
+.receipt__lead {
+  color: var(--colour-text-muted);
+  font-size: 0.92rem;
+}
+
+.receipt__reference {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  font-weight: 400;
+}

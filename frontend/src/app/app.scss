@@ -1,0 +1,126 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  background: var(--colour-header-bg);
+  color: var(--colour-header-text);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.app-header__inner {
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: 0.75rem var(--layout-gutter);
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: inherit;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.app-header__logo {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  background: var(--colour-accent);
+  color: #06121f;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.app-header__title {
+  font-size: 1.1rem;
+}
+
+.app-header__nav {
+  display: flex;
+  gap: 1.25rem;
+  margin-inline-end: auto;
+
+  a {
+    color: inherit;
+    text-decoration: none;
+    font-size: 0.9rem;
+    opacity: 0.85;
+    padding-block: 0.25rem;
+    border-bottom: 2px solid transparent;
+    transition: opacity 0.15s ease, border-color 0.15s ease;
+  }
+
+  a:hover {
+    opacity: 1;
+  }
+
+  a.is-active {
+    opacity: 1;
+    border-bottom-color: var(--colour-accent);
+  }
+}
+
+.app-header__user {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-size: 0.9rem;
+}
+
+.app-header__name {
+  opacity: 0.9;
+}
+
+.app-main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: 1.75rem var(--layout-gutter) 3rem;
+}
+
+.app-footer {
+  padding: 1rem var(--layout-gutter) 1.5rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--colour-text-muted);
+
+  p {
+    max-width: var(--layout-max-width);
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-header__inner {
+    gap: 0.75rem;
+  }
+
+  .app-header__nav {
+    order: 3;
+    width: 100%;
+    margin-inline-end: 0;
+  }
+
+  .app-header__user {
+    margin-inline-start: auto;
+  }
+
+  .app-header__name {
+    display: none;
+  }
+}

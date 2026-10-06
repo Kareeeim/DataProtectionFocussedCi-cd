@@ -1,0 +1,147 @@
+# ===========================================================================
+#  DemoBank API - base configuration (applies to every profile)
+# ===========================================================================
+#  Secrets are NEVER written in this file: every credential is read from an
+#  environment variable and the application refuses to start when a required
+#  one is missing or too weak (see JwtProperties / StartupSecurityCheck).
+# ===========================================================================
+
+spring:
+  application:
+    name: demobank-api
+
+  # -------------------------------------------------------------------------
+  # Datasource - connected with the least-privilege runtime account (DML only).
+  # -------------------------------------------------------------------------
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/demobank?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8}
+    username: ${DB_APP_USER:demobank_app}
+    password: ${DB_APP_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: demobank-pool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 10000
+      # Recycle connections so a network hiccup never leaves a half-dead
+      # connection serving requests.
+      max-lifetime: 1800000
+      keepalive-time: 300000
+
+  # -------------------------------------------------------------------------
+  # JPA / Hibernate
+  # -------------------------------------------------------------------------
+  jpa:
+    # `open-in-view` keeps a Hibernate session open for the whole request,
+    # which hides lazy-loading bugs and lengthens the window in which a
+    # connection is held. Disabled on purpose.
+    open-in-view: false
+    show-sql: false
+    hibernate:
+      # Flyway owns the schema. Hibernate may only *verify* that the entities
+      # match it - it never generates DDL.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+        query:
+          # Reject an unbounded number of SQL statements per HTTP request.
+          plan_cache_max_size: 2048
+          in_clause_parameter_padding: true
+
+  # -------------------------------------------------------------------------
+  # Flyway - schema migrations run at startup with a SEPARATE account that
+  # holds the DDL rights. The application's own account cannot change schema.
+  # -------------------------------------------------------------------------
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    user: ${DB_MIGRATOR_USER:demobank_migrator}
+    password: ${DB_MIGRATOR_PASSWORD:}
+    # Fail the deployment if a migration file was edited after being applied.
+    validate-on-migrate: true
+    clean-disabled: true
+
+  # -------------------------------------------------------------------------
+  # JSON
+  # -------------------------------------------------------------------------
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      # Reject request bodies containing unexpected fields instead of silently
+      # ignoring them: blocks "mass assignment" style attacks where a client
+      # tries to smuggle fields such as `role` or `balance` into a payload.
+      fail-on-unknown-properties: true
+
+server:
+  port: 8080
+  # Never send stack traces, exception messages or binding errors to clients.
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+    include-exception: false
+    whitelabel:
+      enabled: false
+  # Limit request size so a single request cannot exhaust memory.
+  tomcat:
+    max-http-form-post-size: 64KB
+    max-swallow-size: 1MB
+  compression:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Only the health probe. No env, beans, heapdump, mappings... those
+        # endpoints are a gift to an attacker who reaches them.
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+# ===========================================================================
+#  Application-specific security settings
+# ===========================================================================
+app:
+  security:
+    jwt:
+      # MUST be overridden by the environment. Minimum 32 characters, enforced
+      # at startup: a short key makes the HMAC signature brute-forceable.
+      secret: ${JWT_SECRET:}
+      issuer: demobank-api
+      # Short lifetime limits the damage of a stolen token.
+      ttl: 30m
+      clock-skew: 30s
+    cors:
+      # Explicit allow-list. Never "*", and credentials are disabled because
+      # the API authenticates with an Authorization header, not cookies.
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+    login:
+      # Brute-force protection: after `max-attempts` failures within `window`,
+      # further attempts for that account/IP pair are refused.
+      max-attempts: 5
+      window: 15m
+    # Content-Security-Policy returned by the API. A JSON endpoint needs no
+    # scripts, styles, images or frames at all.
+    csp-policy: "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+
+logging:
+  level:
+    root: INFO
+    com.demobank: INFO
+    # Never log SQL parameters at INFO; set to DEBUG only while debugging
+    # locally and never in an environment holding real data.
+    org.hibernate.SQL: WARN
+    org.springframework.security: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
